@@ -13,8 +13,16 @@ import requests
 
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 # نموذج مجاني افتراضياً (لاحقة :free) لتفادي أي تكلفة أثناء التجربة والتسليم
-OPENROUTER_MODEL = os.environ.get("OPENROUTER_MODEL", "meta-llama/llama-3.1-8b-instruct:free")
+OPENROUTER_MODEL = os.environ.get("OPENROUTER_MODEL", "meta-llama/llama-3.3-70b-instruct:free")
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+
+# قائمة احتياطية: لو الموديل الأساسي اتشال من قائمة OpenRouter المجانية (كتالوج الموديلات المجانية
+# يتغيّر باستمرار)، الكود يجرب الموديلات دي بالترتيب تلقائياً قبل ما يستسلم.
+FALLBACK_MODELS = [
+    "meta-llama/llama-3.3-70b-instruct:free",
+    "qwen/qwen3-next-80b-a3b-instruct:free",
+    "openrouter/free",
+]
 
 
 def build_prompt(query, context):
@@ -35,28 +43,49 @@ def build_prompt(query, context):
 الإجابة:"""
 
 
+def _call_openrouter_once(prompt, model):
+    """يستدعي OpenRouter بموديل واحد محدد، ويرجع (نجاح: bool, نص: str)."""
+    response = requests.post(
+        OPENROUTER_URL,
+        headers={
+            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+            "Content-Type": "application/json",
+        },
+        json={
+            "model": model,
+            "messages": [{"role": "user", "content": prompt}],
+        },
+        timeout=60,
+    )
+    if response.status_code == 404:
+        return False, "model_not_found"
+    response.raise_for_status()
+    data = response.json()
+    return True, data["choices"][0]["message"]["content"].strip()
+
+
 def call_openrouter(prompt):
-    """يستدعي OpenRouter API ويرجع نص الإجابة، أو رسالة خطأ واضحة لو فشل الاتصال."""
+    """
+    يستدعي OpenRouter API بالموديل المضبوط في OPENROUTER_MODEL.
+    لو الموديل غير موجود في الكتالوج (404)، يجرب الموديلات في FALLBACK_MODELS بالترتيب تلقائياً
+    قبل إرجاع رسالة خطأ نهائية.
+    """
     if not OPENROUTER_API_KEY:
         return "⚠️ لم يتم ضبط مفتاح OPENROUTER_API_KEY بعد."
-    try:
-        response = requests.post(
-            OPENROUTER_URL,
-            headers={
-                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": OPENROUTER_MODEL,
-                "messages": [{"role": "user", "content": prompt}],
-            },
-            timeout=60,
-        )
-        response.raise_for_status()
-        data = response.json()
-        return data["choices"][0]["message"]["content"].strip()
-    except Exception as e:
-        return f"❌ خطأ أثناء الاتصال بـ OpenRouter: {e}"
+
+    models_to_try = [OPENROUTER_MODEL] + [m for m in FALLBACK_MODELS if m != OPENROUTER_MODEL]
+
+    last_error = None
+    for model in models_to_try:
+        try:
+            ok, result = _call_openrouter_once(prompt, model)
+            if ok:
+                return result
+            last_error = f"الموديل {model} غير متاح حالياً (404)"
+        except Exception as e:
+            last_error = str(e)
+
+    return f"❌ خطأ أثناء الاتصال بـ OpenRouter بعد تجربة كل الموديلات المتاحة: {last_error}"
 
 
 def format_sources(context):
