@@ -83,8 +83,15 @@ st.markdown(
         border-radius: 14px !important; font-family: 'Tajawal', sans-serif !important;
         font-weight: 700 !important; padding: 0.85rem 1rem !important;
         transition: transform 0.15s ease;
+        background: {CARD} !important; color: {TEXT} !important;
+        border: 1px solid #E9D9C3 !important;
     }}
-    div[data-testid="stButton"] > button:hover {{ transform: translateY(-2px) scale(1.01); }}
+    div[data-testid="stButton"] > button * {{ color: {TEXT} !important; }}
+    div[data-testid="stButton"] > button:hover {{
+        transform: translateY(-2px) scale(1.01);
+        border-color: {TURQUOISE} !important; color: {PURPLE} !important;
+    }}
+    div[data-testid="stButton"] > button:hover * {{ color: {PURPLE} !important; }}
 
     /* فقاعات الشات */
     div[data-testid="stChatMessage"] {{
