@@ -56,7 +56,7 @@ st.markdown(
     h1, h2, h3, .display-font {{ font-family: 'Cairo', sans-serif; }}
     #MainMenu, footer {{ visibility: hidden; }}
     header[data-testid="stHeader"] {{ height: 0; visibility: hidden; }}
-    .block-container {{ padding-top: 2.2rem; max-width: 760px; }}
+    .block-container {{ padding-top: 3.5rem; max-width: 760px; }}
 
     /* هيدر متدرّج بألوان نوبية */
     .app-header {{
