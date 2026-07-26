@@ -10,12 +10,12 @@ documents_module = importlib.import_module("01_documents")
 
 def preprocess_arabic(text):
     """توحيد شكل الكلمات العربية (إزالة تشكيل، توحيد الألف/الياء/التاء المربوطة، إزالة ترقيم)."""
-    text = re.sub(r"[\u064B-\u065F]", "", text)   # إزالة التشكيل
-    text = re.sub(r"[إأآا]", "ا", text)            # توحيد أشكال الألف
-    text = re.sub(r"ى", "ي", text)                 # توحيد الألف المقصورة بالياء
-    text = re.sub(r"ة", "ه", text)                 # توحيد التاء المربوطة بالهاء
-    text = re.sub(r"[^\w\s]", "", text)            # إزالة علامات الترقيم
-    text = re.sub(r"\s+", " ", text).strip()       # إزالة المسافات الزائدة
+    text = re.sub(r"[\u064B-\u065F]", "", text)   
+    text = re.sub(r"[إأآا]", "ا", text)           
+    text = re.sub(r"ى", "ي", text)                 
+    text = re.sub(r"ة", "ه", text)                
+    text = re.sub(r"[^\w\s]", "", text)            
+    text = re.sub(r"\s+", " ", text).strip()      
     return text
 
 
