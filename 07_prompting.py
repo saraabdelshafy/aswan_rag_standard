@@ -4,20 +4,15 @@
 عبر OpenRouter API لتوليد إجابة نهائية، مع إلحاق المصادر المستخدمة إجبارياً
 بنهاية كل إجابة (لضمان أن الإجابة تستشهد بمصادرها دائماً).
 
-لا يوجد أي مفتاح API مكتوب هنا صراحة — القيم تُقرأ من متغيرات البيئة، وعند
-النشر على Streamlit Cloud تُقرأ من Streamlit Secrets (انظر streamlit_app.py).
 """
 import os
 
 import requests
 
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
-# نموذج مجاني افتراضياً (لاحقة :free) لتفادي أي تكلفة أثناء التجربة والتسليم
 OPENROUTER_MODEL = os.environ.get("OPENROUTER_MODEL", "meta-llama/llama-3.3-70b-instruct:free")
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
-# قائمة احتياطية: لو الموديل الأساسي اتشال من قائمة OpenRouter المجانية (كتالوج الموديلات المجانية
-# يتغيّر باستمرار)، الكود يجرب الموديلات دي بالترتيب تلقائياً قبل ما يستسلم.
 FALLBACK_MODELS = [
     "meta-llama/llama-3.3-70b-instruct:free",
     "qwen/qwen3-next-80b-a3b-instruct:free",
