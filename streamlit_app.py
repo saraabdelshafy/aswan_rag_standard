@@ -30,7 +30,7 @@ except Exception:
 # ---------------------------------------------------------------------------
 # إعداد الصفحة + هوية بصرية نوبية زاهية (تركواز + فوشيا + أصفر + برتقالي)
 # ---------------------------------------------------------------------------
-st.set_page_config(page_title="أسوان RAG", page_icon="", layout="centered")
+st.set_page_config(page_title="أسوان RAG", page_icon="⛵🐪🌊", layout="centered")
 
 TURQUOISE = "#00A9A5"
 MAGENTA = "#D6336C"
