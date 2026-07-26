@@ -127,7 +127,7 @@ st.markdown(
         </div>
         <div>
             <p class="app-title"> أسوان نوباوي 🐪🌴</p>
-            <p class="app-subtitle">نظام استرجاع وتوليد معزز بالمعرفة عن ثقافة ومعالم أسوان</p>
+            <p class="app-subtitle">نظام استرجاع وتوليد معزز بالمعرفة عن ثقافة ومعالم أسوان بلاد الذهب </p>
         </div>
     </div>
     <div class="pattern-strip"></div>
