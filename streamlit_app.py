@@ -126,7 +126,7 @@ st.markdown(
             </svg>
         </div>
         <div>
-            <p class="app-title"> أسوان نوباوي 🌴</p>
+            <p class="app-title"> أسوان نوباوي 🐪🌴</p>
             <p class="app-subtitle">نظام استرجاع وتوليد معزز بالمعرفة عن ثقافة ومعالم أسوان</p>
         </div>
     </div>
