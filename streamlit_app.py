@@ -30,7 +30,7 @@ except Exception:
 # ---------------------------------------------------------------------------
 # إعداد الصفحة + هوية بصرية نوبية زاهية (تركواز + فوشيا + أصفر + برتقالي)
 # ---------------------------------------------------------------------------
-st.set_page_config(page_title="أسوان RAG", page_icon="🏛️", layout="centered")
+st.set_page_config(page_title="أسوان RAG", page_icon="", layout="centered")
 
 TURQUOISE = "#00A9A5"
 MAGENTA = "#D6336C"
@@ -126,7 +126,7 @@ st.markdown(
             </svg>
         </div>
         <div>
-            <p class="app-title">أسوان RAG 🌴</p>
+            <p class="app-title"> أسوان نوباوي 🌴</p>
             <p class="app-subtitle">نظام استرجاع وتوليد معزز بالمعرفة عن ثقافة ومعالم أسوان</p>
         </div>
     </div>
@@ -160,7 +160,7 @@ if "pending_query" not in st.session_state:
 if not st.session_state.messages:
     st.markdown(
         f'<p style="text-align:center; color:{TEXT}; font-weight:700; margin-top:0.2rem;">'
-        '👋 اسألي عن معابد أسوان، حدائقها، نزهاتها النيلية، أو عادات وتقاليد النوبة</p>',
+        '👋 اسأل عن معابد أسوان، حدائقها، نزهاتها النيلية، أو عادات وتقاليد النوبة</p>',
         unsafe_allow_html=True,
     )
     cols = st.columns(2)
