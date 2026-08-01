@@ -1,22 +1,53 @@
-===============
- #أسوان نوباوي# RAG — واجهة Streamlit الاحترافية (نسخة التحميل الكسول)
-=====================================================================
-
-الخط الكامل:
-01 المستندات -> 02 التنظيف -> 03 التقطيع -> 04 التمثيل المتجهي
--> 05 مخزن Chroma -> 06 الاسترجاع + Context Filter -> 07 Prompting
--> 08 Ground Truth -> 09 التقييم -> عرض الإجابة مع مصادرها.
-=====================================================================
-"""
-import importlib
+# =====================================================================
+# أسوان نوباوي RAG — واجهة Streamlit الاحترافية (نسخة التحميل الكسول)
+# =====================================================================
+# الخط الكامل:
+# 01 المستندات -> 02 التنظيف -> 03 التقطيع -> 04 التمثيل المتجهي
+# -> 05 مخزن Chroma -> 06 الاسترجاع + Context Filter -> 07 Prompting
+# -> 08 Ground Truth -> 09 التقييم -> عرض الإجابة مع مصادرها.
+# =====================================================================
 import html
+import importlib
+import importlib.util
+import os
+import sys
+from pathlib import Path
 import pandas as pd
 import streamlit as st
 # =====================================================================
 #  التحميل الكسول للوحدات — لا شيء ثقيل يعمل عند فتح الصفحة
+#  (يدعم أسماء الملفات الرقمية مثل 01_documents.py)
 # =====================================================================
-_modules = {}
-_module_errors = {}
+_modules: dict = {}
+_module_errors: dict = {}
+def _import_module_file(name: str):
+    """استيراد وحدة قد يكون اسمها رقماً (مثل 01_documents).
+    أسماء الوحدات التي تبدأ برقم غير صالحة لـ importlib.import_module القياسي
+    (Python يتعامل معها كأسماء معرفات غير صالحة)، لذلك نبحث عن الملف
+    مباشرة في مجلد المشروع ونحمّله عبر importlib.util.
+    الإصلاح: هذا هو الخطأ الأساسي في النسخة الأصلية — كان الاستيراد
+    يفشل دائماً فتبقى الإحصائيات صفراً ويظهر خطأ الاسترجاع دائماً.
+    """
+    # 1) جرّب الاستيراد القياسي أولاً (للوحدات ذات الأسماء الصالحة)
+    try:
+        return importlib.import_module(name)
+    except ModuleNotFoundError:
+        pass
+    # 2) ابحث عن ملف مطابق في مجلد المشروع أو في مجلد modules/
+    base_dir = Path(__file__).resolve().parent
+    candidates = [
+        base_dir / f"{name}.py",
+        base_dir / "modules" / f"{name}.py",
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            spec = importlib.util.spec_from_file_location(name, candidate)
+            if spec and spec.loader:
+                module = importlib.util.module_from_spec(spec)
+                sys.modules[name] = module  # حتى يعمل الاستيراد المتبادل
+                spec.loader.exec_module(module)
+                return module
+    raise ModuleNotFoundError(f"تعذّر العثور على ملف الوحدة `{name}`")
 def get_module(name: str):
     """تحميل وحدة عند أول استخدام فقط، مع التقاط أي خطأ."""
     if name in _modules:
@@ -24,7 +55,7 @@ def get_module(name: str):
     if name in _module_errors:
         return None
     try:
-        mod = importlib.import_module(name)
+        mod = _import_module_file(name)
         _modules[name] = mod
         return mod
     except Exception as exc:  # noqa: BLE001
@@ -33,16 +64,20 @@ def get_module(name: str):
 def module_error(name: str) -> str:
     exc = _module_errors.get(name)
     return f"{type(exc).__name__}: {str(exc)[:220]}" if exc else ""
+def reset_module_cache() -> None:
+    """إعادة تعيين ذاكرة التحميل (مفيدة بعد إضافة ملفات جديدة)."""
+    _modules.clear()
+    _module_errors.clear()
 # ================= مفاتيح الإعداد من Streamlit Secrets =================
 def _apply_secrets():
     prompting = get_module("07_prompting")
     if prompting is None:
         return
     try:
-        if not prompting.OPENROUTER_API_KEY:
+        if not getattr(prompting, "OPENROUTER_API_KEY", ""):
             prompting.OPENROUTER_API_KEY = st.secrets.get("OPENROUTER_API_KEY", "")
         prompting.OPENROUTER_MODEL = st.secrets.get(
-            "OPENROUTER_MODEL", prompting.OPENROUTER_MODEL
+            "OPENROUTER_MODEL", getattr(prompting, "OPENROUTER_MODEL", "")
         )
     except Exception:
         pass
@@ -63,11 +98,12 @@ WELCOME_MESSAGE = (
     "اكتب موضوعك (عادات، مأكولات، تراث، معالم...) وسيتم الرد بناءً على "
     "المستندات الموثّقة في قاعدة المعرفة مع ذكر المصادر في نهاية الإجابة."
 )
+DEFAULT_CATEGORIES = ["عادات", "مأكولات", "ملابس", "مهرجانات", "عمارة", "حرف", "تراث", "سياحة"]
 # ================= إحصائيات خفيفة (وحدات البيانات فقط) =================
 def _doc_stats():
     docs_mod = get_module("01_documents")
     if docs_mod is None:
-        return 0, ["عادات", "مأكولات", "ملابس", "مهرجانات", "عمارة", "حرف", "تراث", "سياحة"]
+        return 0, list(DEFAULT_CATEGORIES)
     try:
         docs = docs_mod.get_documents()
         cats = sorted(
@@ -128,7 +164,9 @@ header[data-testid="stHeader"] { background: rgba(10,14,20,0.6); backdrop-filter
 [data-testid="stChatMessage"] {
     background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
     border-radius: 18px; padding: 14px 18px; margin-bottom: 10px;
+    direction: rtl; text-align: right;
 }
+[data-testid="stChatMessage"] p { direction: rtl; text-align: right; }
 [data-testid="chatAvatarIcon"] {
     background: linear-gradient(135deg, #f59e0b, #f97316) !important;
     color: #0a0e14 !important; border-radius: 10px !important;
@@ -150,6 +188,7 @@ header[data-testid="stHeader"] { background: rgba(10,14,20,0.6); backdrop-filter
     background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1) !important;
     border-radius: 16px !important; overflow: hidden;
 }
+.stExpander summary, .stExpander details { direction: rtl; text-align: right; }
 [data-testid="stMetric"] {
     background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1);
     border-radius: 16px; padding: 14px;
@@ -199,12 +238,13 @@ hr { border-color: rgba(255,255,255,0.08); }
 .chunk-card {
     background: rgba(0,0,0,0.30); border: 1px solid rgba(255,255,255,0.1);
     border-radius: 14px; padding: 12px 14px; margin-bottom: 10px;
+    direction: rtl; text-align: right;
 }
 .chunk-card-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; gap: 10px; flex-wrap: wrap; }
 .chunk-card-title { color: #fbbf24; font-weight: 700; font-size: 13px; }
 .chunk-card-id { color: #9ca3af; font-weight: 400; }
 .chunk-card-meta { color: #9ca3af; font-size: 11px; }
-.chunk-card-text { color: #d1d5db; font-size: 12.5px; line-height: 1.9; }
+.chunk-card-text { color: #d1d5db; font-size: 12.5px; line-height: 1.9; white-space: pre-wrap; }
 /* ============ رأس التقييم ============ */
 .eval-header {
     display: flex; align-items: center; gap: 14px;
@@ -284,7 +324,8 @@ def chunk_card_html(chunk: dict) -> str:
     doc_id = chunk.get("document_id", "؟")
     category = chunk.get("category", "")
     distance = chunk.get("distance", 0.0)
-    text = html.escape(str(chunk.get("text", "")))
+    # إصلاح: تحويل فواصل الأسطر إلى <br> حتى لا يظهر النص في سطر واحد
+    text = html.escape(str(chunk.get("text", ""))).replace("\n", "<br>")
     title = chunk.get("title") or f"مصدر {doc_id}"
     try:
         dist_txt = f"{float(distance):.3f}"
@@ -298,7 +339,7 @@ def chunk_card_html(chunk: dict) -> str:
         f'</div><div class="chunk-card-text">{text}</div></div>'
     )
 def categories_chips_html() -> str:
-    chips = "".join(f'<span class="cat-chip">{html.escape(c)}</span>' for c in CATEGORIES)
+    chips = "".join(f'<span class="cat-chip">{html.escape(str(c))}</span>' for c in CATEGORIES)
     return f'<div class="cat-chips">{chips}</div>'
 def gt_distribution_html(gt) -> str:
     rows = []
@@ -307,7 +348,7 @@ def gt_distribution_html(gt) -> str:
         pct = (count / len(gt)) * 100 if gt else 0
         rows.append(
             f'<div class="gt-bar-row"><div class="gt-bar-head">'
-            f'<span>{html.escape(cat)}</span><span>{count}</span></div>'
+            f'<span>{html.escape(str(cat))}</span><span>{count}</span></div>'
             f'<div class="gt-bar-track"><div class="gt-bar-fill" style="width:{pct:.0f}%"></div></div></div>'
         )
     return "".join(rows)
@@ -337,6 +378,12 @@ def sanitize_chunks(chunks) -> list:
         except Exception:
             continue
     return safe
+def ensure_messages_initialized() -> None:
+    """تهيئة رسائل الجلسة بأمان (إصلاح: لا KeyError عند أول تشغيل)."""
+    if "messages" not in st.session_state:
+        st.session_state.messages = [
+            {"role": "assistant", "content": WELCOME_MESSAGE, "chunks": None}
+        ]
 # =====================================================================
 #  الشريط الجانبي
 # =====================================================================
@@ -356,11 +403,21 @@ with st.sidebar:
     ]
     for _name, _light in _check:
         if _name in _module_errors:
-            st.markdown(f'<span class="sys-dot sys-err"></span>‏ `{_name}` — فشل التحميل', unsafe_allow_html=True)
+            st.markdown(
+                f'<span class="sys-dot sys-err"></span> <code>{_name}</code> — فشل التحميل',
+                unsafe_allow_html=True,
+            )
         elif _light and _name in _modules:
-            st.markdown(f'<span class="sys-dot sys-ok"></span>‏ `{_name}` — جاهزة', unsafe_allow_html=True)
+            st.markdown(
+                f'<span class="sys-dot sys-ok"></span> <code>{_name}</code> — جاهزة',
+                unsafe_allow_html=True,
+            )
         else:
-            st.markdown(f'<span class="sys-dot" style="background:#6b7280"></span>‏ `{_name}` — عند الطلب', unsafe_allow_html=True)
+            st.markdown(
+                f'<span class="sys-dot" style="background:#6b7280"></span> '
+                f'<code>{_name}</code> — عند الطلب',
+                unsafe_allow_html=True,
+            )
     if _module_errors:
         with st.expander("تفاصيل الأعطال"):
             for _n in _module_errors:
@@ -380,16 +437,13 @@ with st.sidebar:
 # =====================================================================
 #  الواجهة الرئيسية — تُرسم دائماً بغضّ النظر عن حالة الوحدات
 # =====================================================================
+ensure_messages_initialized()
 st.markdown(hero_html(), unsafe_allow_html=True)
 st.markdown(stats_html(), unsafe_allow_html=True)
 tab_chat, tab_eval = st.tabs(["💬 الاستفسار الذكي", "📊 التقييم ونتائج الأداء"])
 # ================= تبويب الاستفسار الذكي =================
 with tab_chat:
     st.image(SCENE_IMAGE, caption="مراكب النيل في أسوان — نافذة على التراث النوبي")
-    if "messages" not in st.session_state:
-        st.session_state.messages = [
-            {"role": "assistant", "content": WELCOME_MESSAGE, "chunks": None}
-        ]
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"], avatar="🏛️" if msg["role"] == "assistant" else "👤"):
             st.markdown(msg["content"])
