@@ -3,8 +3,9 @@ streamlit_app.py
 واجهة Streamlit النهائية لمشروع أسوان RAG.
 
 تجمع كل مراحل الخط: المستندات (01) -> التنظيف (02) -> التقطيع (03)
--> التمثيل المتجهي (04) -> مخزن Chroma (05) -> الاسترجاع (06) -> الـ Prompting (07)
--> عرض الإجابة مع مصادرها في واجهة شات تفاعلية بألوان نوبية زاهية.
+-> التمثيل المتجهي (04) -> مخزن Chroma (05) -> الاسترجاع + Context Filter (06)
+-> الـ Prompting (07) -> Ground Truth (08) -> التقييم (09)
+-> عرض الإجابة مع مصادرها في واجهة شات تفاعلية + صفحة تقييم.
 """
 import importlib
 
@@ -18,8 +19,10 @@ vector_module = importlib.import_module("04_vector_representation")
 store_module = importlib.import_module("05_create_chroma_store")
 retrieve_module = importlib.import_module("06_retrieve_context")
 prompting = importlib.import_module("07_prompting")
+ground_truth_module = importlib.import_module("08_ground_truth")
+evaluation_module = importlib.import_module("09_evaluation")
 
-# قراءة مفاتيح الإعداد من Streamlit Secrets عند النشر (بدون كتابة أي مفتاح حقيقي في الكود)
+# قراءة مفاتيح الإعداد من Streamlit Secrets عند النشر
 try:
     if not prompting.OPENROUTER_API_KEY:
         prompting.OPENROUTER_API_KEY = st.secrets.get("OPENROUTER_API_KEY", "")
@@ -27,179 +30,140 @@ try:
 except Exception:
     pass
 
-# ---------------------------------------------------------------------------
-# إعداد الصفحة + هوية بصرية نوبية زاهية (تركواز + فوشيا + أصفر + برتقالي)
-# ---------------------------------------------------------------------------
-st.set_page_config(page_title="أسوان RAG", page_icon="⛵🐪🌊", layout="centered")
-
-TURQUOISE = "#00A9A5"
-MAGENTA = "#D6336C"
-YELLOW = "#F4B400"
-ORANGE = "#F2703C"
-PURPLE = "#6C3483"
-BG = "#FFF9EF"
-CARD = "#FFFFFF"
-TEXT = "#2B2420"
-MUTED = "#8A7F6E"
-
-ACCENT_CYCLE = [TURQUOISE, MAGENTA, YELLOW, ORANGE, PURPLE]
-
+st.set_page_config(page_title="أسوان نوباوي  RAG", page_icon="⛵🐪🌊", layout="centered")
 st.markdown(
-    f"""
-    <style>
-    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@600;700;800;900&family=Tajawal:wght@400;500;700&display=swap');
-
-    html, body, .stApp {{
-        direction: rtl; text-align: right;
-        background: {BG}; font-family: 'Tajawal', sans-serif; color: {TEXT};
-    }}
-    h1, h2, h3, .display-font {{ font-family: 'Cairo', sans-serif; }}
-    #MainMenu, footer {{ visibility: hidden; }}
-    header[data-testid="stHeader"] {{ height: 0; visibility: hidden; }}
-    .block-container {{ padding-top: 3.5rem; max-width: 760px; }}
-
-    /* هيدر متدرّج بألوان نوبية */
-    .app-header {{
-        background: linear-gradient(120deg, {TURQUOISE} 0%, {PURPLE} 55%, {MAGENTA} 100%);
-        border-radius: 20px; padding: 1.4rem 1.6rem; margin-bottom: 1.3rem;
-        display: flex; align-items: center; gap: 1rem;
-        box-shadow: 0 8px 20px rgba(108,52,131,0.25);
-    }}
-    .app-logo {{
-        width: 56px; height: 56px; border-radius: 16px; background: rgba(255,255,255,0.22);
-        display: flex; align-items: center; justify-content: center; font-size: 28px;
-        border: 2px solid rgba(255,255,255,0.4);
-    }}
-    .app-title {{ font-family: 'Cairo', sans-serif; font-weight: 900; font-size: 1.6rem; color: #FFFFFF; margin: 0; }}
-    .app-subtitle {{ font-size: 0.85rem; color: rgba(255,255,255,0.92); margin: 0; }}
-
-    /* شريط أصفر/برتقالي زخرفي تحت الهيدر (زي زخارف البيوت النوبية) */
-    .pattern-strip {{
-        height: 6px; border-radius: 6px; margin-bottom: 1.4rem;
-        background: repeating-linear-gradient(90deg, {YELLOW} 0 20px, {ORANGE} 20px 40px, {MAGENTA} 40px 60px, {TURQUOISE} 60px 80px);
-    }}
-
-    /* كروت الأسئلة الجاهزة بألوان دايرة */
-    div[data-testid="stButton"] > button {{
-        border-radius: 14px !important; font-family: 'Tajawal', sans-serif !important;
-        font-weight: 700 !important; padding: 0.85rem 1rem !important;
-        transition: transform 0.15s ease;
-        background: {CARD} !important; color: {TEXT} !important;
-        border: 1px solid #E9D9C3 !important;
-    }}
-    div[data-testid="stButton"] > button * {{ color: {TEXT} !important; }}
-    div[data-testid="stButton"] > button:hover {{
-        transform: translateY(-2px) scale(1.01);
-        border-color: {TURQUOISE} !important; color: {PURPLE} !important;
-    }}
-    div[data-testid="stButton"] > button:hover * {{ color: {PURPLE} !important; }}
-
-    /* فقاعات الشات */
-    div[data-testid="stChatMessage"] {{
-        background: {CARD} !important; border-radius: 16px !important;
-        padding: 0.95rem 1.15rem !important; margin-bottom: 0.8rem !important;
-        border-right: 5px solid {TURQUOISE} !important;
-        box-shadow: 0 2px 6px rgba(43,36,32,0.06);
-    }}
-    div[data-testid="stChatMessage"] * {{ color: {TEXT} !important; }}
-
-    div[data-testid="stChatInput"] textarea {{ color: {TEXT} !important; background: {CARD} !important; }}
-    div[data-testid="stChatInput"] {{ border: 2px solid {TURQUOISE}33 !important; border-radius: 16px !important; }}
-
-    div[data-testid="stExpander"] {{
-        border: 2px dashed {ORANGE}55 !important; border-radius: 14px !important; background: {CARD} !important;
-    }}
-
-    .footer-note {{ text-align: center; color: {MUTED}; font-size: 0.78rem; margin-top: 1.5rem; }}
-    .footer-note b {{ color: {MAGENTA}; }}
-    </style>
-
-    <div class="app-header">
-        <div class="app-logo">
-            <svg width="34" height="34" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-                <circle cx="68" cy="26" r="14" fill="{YELLOW}" opacity="0.95"/>
-                <path d="M50 12 L50 62 L74 62 Z" fill="#FFFFFF" opacity="0.96"/>
-                <rect x="48.5" y="10" width="3" height="56" rx="1.5" fill="#FFFFFF"/>
-                <path d="M20 66 Q50 54 80 66 L80 70 Q50 60 20 70 Z" fill="{TURQUOISE}"/>
-                <path d="M14 76 Q50 62 86 76 L86 81 Q50 68 14 81 Z" fill="#FFFFFF" opacity="0.9"/>
-                <path d="M10 88 Q50 74 90 88 L90 93 Q50 80 10 93 Z" fill="{TURQUOISE}"/>
-            </svg>
-        </div>
-        <div>
-            <p class="app-title"> أسوان نوباوي 🐪🌴</p>
-            <p class="app-subtitle">نظام استرجاع وتوليد معزز بالمعرفة عن ثقافة ومعالم أسوان بلاد الذهب </p>
-        </div>
-    </div>
-    <div class="pattern-strip"></div>
-    """,
+    "<style>body, .stApp { direction: rtl; text-align: right; }</style>",
     unsafe_allow_html=True,
 )
 
-with st.expander("ℹ️ عن المشروع"):
+st.title("🏛️ أسوان RAG")
+st.caption("نظام استرجاع وتوليد معزز بالمعرفة (RAG) عن ثقافة ومعالم أسوان")
+
+# تبويبات: شات + تقييم
+tab_chat, tab_eval = st.tabs(["💬 الشات", "📊 التقييم (Ground Truth)"])
+
+# ================== تبويب الشات ==================
+with tab_chat:
+    with st.expander("ℹ️ عن المشروع"):
+        st.write(
+            f"قاعدة المعرفة تحتوي على {len(documents_module.get_documents())} مستنداً أصلياً عن أسوان. "
+            "كل إجابة تُبنى فقط من المستندات المسترجعة فعلياً بعد تمريرها على Context Filter "
+            "وتذكر مصادرها في نهايتها."
+        )
+
+    # إعدادات الفلترة في الشريط الجانبي
+    with st.sidebar:
+        st.header("⚙️ إعدادات الاسترجاع")
+        k_value = st.slider("عدد المستندات المسترجعة (k)", 1, 6, 3)
+        max_dist = st.slider(
+            "أقصى مسافة مسموح بها (Context Filter)", 0.1, 1.5, 0.8, 0.05
+        )
+        dedup = st.checkbox("إزالة التكرار على مستوى المستند", value=True)
+
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+
+    for msg in st.session_state.messages:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
+
+    query = st.chat_input("اسأل عن أي شيء يخص أسوان...")
+
+    if query:
+        st.session_state.messages.append({"role": "user", "content": query})
+        with st.chat_message("user"):
+            st.markdown(query)
+
+        with st.chat_message("assistant"):
+            with st.spinner("جاري الاسترجاع والتوليد..."):
+                context = retrieve_module.retrieve_context(
+                    query,
+                    k=k_value,
+                    persist=False,
+                    max_distance=max_dist,
+                    deduplicate_by_document=dedup,
+                )
+                if not context:
+                    answer = (
+                        "⚠️ مفيش مستندات قريبة كفاية من السؤال بعد تطبيق Context Filter. "
+                        "جرب تخفف قيمة max_distance أو تعيد صياغة السؤال."
+                    )
+                else:
+                    answer = prompting.generate_answer(query, context)
+            st.markdown(answer)
+            if context:
+                with st.expander("📄 الـ Chunks المسترجعة (بعد الفلترة)"):
+                    for c in context:
+                        st.write(
+                            f"[مصدر {c['document_id']}] ({c['category']}) "
+                            f"distance={c['distance']:.3f}"
+                        )
+                        st.write(c["text"])
+                        st.divider()
+
+        st.session_state.messages.append({"role": "assistant", "content": answer})
+
+# ================== تبويب التقييم ==================
+with tab_eval:
+    st.subheader("📊 تقييم النظام على Ground Truth")
+    gt = ground_truth_module.get_ground_truth()
     st.write(
-        f"قاعدة المعرفة تحتوي على {len(documents_module.get_documents())} مستنداً أصلياً عن أسوان "
-        "(المعابد، الحدائق، النزهات النيلية، عادات وتقاليد النوبة). كل إجابة تُبنى فقط من "
-        "المستندات المسترجعة فعلياً وتذكر مصادرها في نهايتها."
+        f"مجموعة التقييم تحتوي على **{len(gt)}** سؤال مرجعي، لكل سؤال المستندات المتوقع "
+        "استرجاعها والكلمات المفتاحية المتوقع ظهورها في الإجابة."
     )
 
-# ---------------------------------------------------------------------------
-# شاشة ترحيب (تظهر فقط قبل أول سؤال) + أسئلة جاهزة ملوّنة
-# ---------------------------------------------------------------------------
-EXAMPLES_AR = [
-    "🟦 عادات وتقاليد أهل النوبة في الاحتفالات",
-    "🟪 ما هي ظاهرة تعامد الشمس في أبو سمبل؟",
-    "🟨 الحديقة النباتية جزيرة كتشنر",
-    "🟧 مراسم ليلة الحنة عند النوبيين",
-]
+    col1, col2 = st.columns(2)
+    with col1:
+        k_eval = st.number_input("k للتقييم", min_value=1, max_value=10, value=3)
+    with col2:
+        max_dist_eval = st.number_input(
+            "max_distance للفلترة", min_value=0.1, max_value=2.0, value=0.8, step=0.05
+        )
 
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-if "pending_query" not in st.session_state:
-    st.session_state.pending_query = None
+    if st.button("🚀 شغل التقييم (بدون فلترة vs مع فلترة)"):
+        with st.spinner("جاري تشغيل التقييم على كل الأسئلة..."):
+            raw_summary, _ = evaluation_module.evaluate_retrieval(
+                k=k_eval, use_filter=False
+            )
+            filtered_summary, filtered_results = evaluation_module.evaluate_retrieval(
+                k=k_eval, use_filter=True, max_distance=max_dist_eval
+            )
 
-if not st.session_state.messages:
-    st.markdown(
-        f'<p style="text-align:center; color:{TEXT}; font-weight:700; margin-top:0.2rem;">'
-        '👋 اسأل عن معابد أسوان، حدائقها، نزهاتها النيلية، أو عادات وتقاليد النوبة</p>',
-        unsafe_allow_html=True,
-    )
-    cols = st.columns(2)
-    for i, ex in enumerate(EXAMPLES_AR):
-        with cols[i % 2]:
-            if st.button(ex, key=f"ex_{i}", use_container_width=True):
-                st.session_state.pending_query = ex.split(" ", 1)[1]
-                st.rerun()
+        st.success("✅ التقييم اكتمل")
 
-# ---------------------------------------------------------------------------
-# عرض المحادثة
-# ---------------------------------------------------------------------------
-for msg in st.session_state.messages:
-    avatar = "🏛️" if msg["role"] == "assistant" else "🙋"
-    with st.chat_message(msg["role"], avatar=avatar):
-        st.markdown(msg["content"])
+        st.markdown("### 📈 مقارنة النتائج")
+        col_a, col_b = st.columns(2)
+        with col_a:
+            st.markdown("**بدون Context Filter**")
+            st.metric("Precision@k", raw_summary["avg_precision@k"])
+            st.metric("Recall@k", raw_summary["avg_recall@k"])
+            st.metric("F1@k", raw_summary["avg_f1@k"])
+            st.metric("MRR", raw_summary["mrr"])
+            st.metric("Hit Rate", raw_summary["hit_rate"])
+        with col_b:
+            st.markdown("**مع Context Filter**")
+            st.metric("Precision@k", filtered_summary["avg_precision@k"])
+            st.metric("Recall@k", filtered_summary["avg_recall@k"])
+            st.metric("F1@k", filtered_summary["avg_f1@k"])
+            st.metric("MRR", filtered_summary["mrr"])
+            st.metric("Hit Rate", filtered_summary["hit_rate"])
 
-typed_query = st.chat_input("اسأل عن أي شيء يخص أسوان...")
-query = st.session_state.pending_query or typed_query
-st.session_state.pending_query = None
+        st.markdown("### 📋 تفاصيل كل سؤال (مع الفلترة)")
+        for r in filtered_results:
+            status = "✅" if r["reciprocal_rank"] > 0 else "❌"
+            with st.expander(f"{status} {r['question']}"):
+                st.write(f"**المتوقع:** {r['expected']}")
+                st.write(f"**المسترجع:** {r['retrieved']}")
+                st.write(
+                    f"**Precision:** {r['precision']:.2f} | "
+                    f"**Recall:** {r['recall']:.2f} | "
+                    f"**F1:** {r['f1']:.2f}"
+                )
 
-if query:
-    st.session_state.messages.append({"role": "user", "content": query})
-    with st.chat_message("user", avatar="🙋"):
-        st.markdown(query)
-
-    with st.chat_message("assistant", avatar="🏛️"):
-        with st.spinner("جاري الاسترجاع والتوليد..."):
-            context = retrieve_module.retrieve_context(query, k=3, persist=False)
-            answer = prompting.generate_answer(query, context)
-        st.markdown(answer)
-        with st.expander("📄 الـ Chunks المسترجعة"):
-            for c in context:
-                st.write(f"[مصدر {c['document_id']}] ({c['category']}) {c['text']}")
-
-    st.session_state.messages.append({"role": "assistant", "content": answer})
-
-st.markdown(
-    '<p class="footer-note">🌴 الإجابات مبنية على مصادر ثقافية موثقة · '
-    'مشروع أكاديمي — استشيري مرشداً سياحياً محلياً للتفاصيل الدقيقة.</p>',
-    unsafe_allow_html=True,
-)
+    with st.expander("👀 استعرض أسئلة Ground Truth"):
+        for item in gt:
+            st.write(
+                f"**{item['id']}.** {item['question']} → "
+                f"docs: {item['expected_document_ids']} | "
+                f"category: {item['category']}"
+            )
