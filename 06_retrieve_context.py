@@ -77,38 +77,28 @@ def filter_context(
     return filtered
 
 
-def retrieve_context(
-    query,
-    k=3,
-    persist=True,
-    max_distance=DEFAULT_MAX_DISTANCE,
-    allowed_categories=None,
-    deduplicate_by_document=False,
-    fetch_k=None,
-):
-    """
-    يرجع أفضل k قطعة نصية (chunks) الأقرب دلالياً لسؤال المستخدم، بعد تطبيق الفلترة.
-
-    - fetch_k: عدد النتائج الخام اللي نجيبها من Chroma قبل الفلترة (افتراضياً k*3
-      علشان لو الفلترة استبعدت بعض النتائج يفضل عندنا بديل).
-    """
+def retrieve_context(query, k=3, persist=True, max_distance=0.8):
+    """يرجع أفضل k قطعة نصية الأقرب دلالياً للسؤال، بشرط ألا تتجاوز المسافة القصوى المحددة."""
     collection = _get_collection(persist=persist)
     query_embedding = vector_module.embed_texts([query])[0]
+    results = collection.query(query_embeddings=[query_embedding], n_results=k)
 
-    # نجيب نتائج أكتر من k علشان بعد الفلترة يفضل عندنا كفاية
-    fetch_k = fetch_k or max(k * 3, 10)
-    raw_results = collection.query(query_embeddings=[query_embedding], n_results=fetch_k)
-
-    # مرحلة الفلترة (Context Filter)
-    filtered = filter_context(
-        raw_results,
-        max_distance=max_distance,
-        allowed_categories=allowed_categories,
-        deduplicate_by_document=deduplicate_by_document,
-    )
-
-    # نرجع أفضل k فقط بعد الفلترة
-    return filtered[:k]
+    context = []
+    for i in range(len(results["ids"][0])):
+        distance = results["distances"][0][i]
+        
+        # فلترة السياق: لا نضيف النص إلا لو كان قريب من السؤال
+        if distance <= max_distance:
+            context.append(
+                {
+                    "chunk_id": results["ids"][0][i],
+                    "text": results["documents"][0][i],
+                    "category": results["metadatas"][0][i].get("category"),
+                    "document_id": results["metadatas"][0][i].get("document_id"),
+                    "distance": distance,
+                }
+            )
+    return context
 
 
 if __name__ == "__main__":
