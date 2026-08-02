@@ -90,9 +90,28 @@ def format_sources(context):
 
 
 def generate_answer(query, context):
-    """يبني الـ Prompt، يستدعي النموذج، ويرجع الإجابة النهائية مع قائمة المصادر دائماً."""
+    """يستدعي النموذج، ويرجع الإجابة النهائية مع قائمة المصادر إن وجدت."""
+
     prompt = build_prompt(query, context)
     answer = call_openrouter(prompt)
+
+    refusal_keywords = [
+        "لا أملك معلومات",
+        "لا أعرف",
+        "ليس لدي أي معلومات",
+        "لا تتوفر",
+        "لا يوجد في السياق",
+        "لم يتم ذكر",
+        "أعتذر",
+        "اعتذر",
+        "عذرًا",
+        "غير موجود في السياق",
+        "لا يمكنني الإجابة"
+    ]
+
+    if not context or any(keyword in answer for keyword in refusal_keywords):
+        return answer
+
     return f"{answer}\n\n{format_sources(context)}"
 
 
