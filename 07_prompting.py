@@ -6,6 +6,7 @@
 
 """
 import os
+import re
 
 import requests
 
@@ -25,10 +26,14 @@ def build_prompt(query, context):
     context_text = "\n".join(
         f"[مصدر {c['document_id']}] ({c['category']}) {c['text']}" for c in context
     )
-    return f"""أنت مرشد سياحي وثقافي متخصص في مدينة أسوان، تتحدث بأسلوب واضح وودود بالعربية.
-أجب عن سؤال المستخدم بالاعتماد فقط على المعلومات الموجودة في السياق أدناه.
-اذكر رقم المصدر بين قوسين مربعين بعد كل معلومة تستخدمها، مثال: [مصدر 3].
-إذا لم تكفِ المعلومات المتوفرة للإجابة، صرّح بذلك بوضوح ولا تختلق معلومات من عندك.
+    return f"""أنت مرشد سياحي وثقافي متخصص في مدينة أسوان، تتحدث بأسلوب ودود ومرحّب بالعربية، وتستخدم رموزاً تعبيرية (إيموجي) مناسبة تضفي دفئاً على الإجابة.
+
+قواعد يجب الالتزام بها:
+- ابدأ الإجابة بترحيب قصير ودافئ بالزائر مع رمز تعبيري مناسب، ثم انتقل للمعلومة.
+- اكتب الإجابة بالكامل باللغة العربية الفصحى، ولا تُدرج أي كلمة أو حرف باللغة الإنجليزية أو أي لغة أخرى داخل النص إطلاقاً، إلا إذا كانت مذكورة حرفياً بنفس الصيغة في نص السياق أدناه.
+- اذكر رقم المصدر بين قوسين مربعين بعد كل معلومة تستخدمها، مثال: [مصدر 3].
+- استخدم فقط المصادر التي استشهدت بها فعلياً داخل نص الإجابة؛ لا تذكر أي مصدر من السياق أدناه لم تستخدمه.
+- إذا كانت المعلومات المتوفرة في السياق غير متعلقة بالسؤال أو غير كافية للإجابة عليه، صرّح بذلك بوضوح ومباشرة دون اختلاق معلومات، ودون استخدام أي من المصادر غير ذات الصلة.
 
 السياق المسترجع:
 {context_text}
@@ -83,9 +88,20 @@ def call_openrouter(prompt):
     return f"❌ خطأ أثناء الاتصال بـ OpenRouter بعد تجربة كل الموديلات المتاحة: {last_error}"
 
 
-def format_sources(context):
-    """يبني قائمة نصية بالمصادر المستخدمة، تُلحق دائماً بنهاية الإجابة."""
-    lines = [f"- مصدر {c['document_id']} ({c['category']})" for c in context]
+def _extract_cited_ids(answer):
+    """يستخرج أرقام المصادر [مصدر N] اللي فعلاً ظهرت داخل نص الإجابة."""
+    return set(re.findall(r"\[مصدر\s+(\d+)\]", answer))
+
+
+def format_sources(context, answer=""):
+    """
+    يبني قائمة نصية بالمصادر التي استُشهد بها فعلياً داخل نص الإجابة فقط.
+    لو answer فاضية أو مفيهاش أي [مصدر N]، بيرجع لعرض كل الـ context (توافقاً
+    مع الاستخدام القديم)، لكن الحالة الطبيعية هي فلترة المصادر غير المستخدمة.
+    """
+    cited_ids = _extract_cited_ids(answer)
+    relevant = [c for c in context if not cited_ids or str(c["document_id"]) in cited_ids]
+    lines = [f"- مصدر {c['document_id']} ({c['category']})" for c in relevant]
     return "**المصادر المستخدمة:**\n" + "\n".join(lines)
 
 
@@ -117,16 +133,29 @@ def is_refusal(answer):
     return any(keyword in answer for keyword in REFUSAL_KEYWORDS)
 
 
+def _strip_stray_english(text):
+    """
+    طبقة حماية إضافية: تشيل أي كلمة إنجليزية منفردة اتقحمت وسط جملة عربية
+    (بين كلمتين عربيتين)، كنتيجة هلوسة من النموذج، مع الحفاظ على أي مصطلح
+    إنجليزي أصلي مذكور كجزء من جملة إنجليزية أطول (أكتر من كلمة متتالية).
+    """
+    arabic = "\u0600-\u06FF"
+    pattern = re.compile(rf"(?<=[{arabic}])(\s+)[A-Za-z]{{2,15}}(?!\s*[A-Za-z])")
+    cleaned = pattern.sub(lambda m: m.group(1), text)
+    return re.sub(r"[ \t]{2,}", " ", cleaned)
+
+
 def generate_answer(query, context):
     """يستدعي النموذج، ويرجع الإجابة النهائية مع قائمة المصادر إن وجدت."""
 
     prompt = build_prompt(query, context)
     answer = call_openrouter(prompt)
+    answer = _strip_stray_english(answer)
 
     if not context or is_refusal(answer):
         return answer
 
-    return f"{answer}\n\n{format_sources(context)}"
+    return f"{answer}\n\n{format_sources(context, answer)}"
 
 
 if __name__ == "__main__":
