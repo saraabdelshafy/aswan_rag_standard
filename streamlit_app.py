@@ -469,12 +469,14 @@ with tab_chat:
                         "غير مرفوع في المستودع."
                     )
                 else:
-                   try:
+                    try:
                         context = retrieve_module.retrieve_context(
-                            query, k=3, persist=False, max_distance=0.8
-                          )
+                            query, k=k_value, persist=False,
+                            max_distance=max_dist, deduplicate_by_document=dedup,
+                        )
                     except Exception as exc:  # noqa: BLE001
                         answer = f"⚠️ حدث خطأ أثناء الاسترجاع: {type(exc).__name__}: {exc}"
+                prompting = None
                 if context:
                     prompting = get_module("07_prompting")
                     if prompting is None:
@@ -489,13 +491,21 @@ with tab_chat:
                         "⚠️ لم يتم العثور على مستندات قريبة كفاية بعد تطبيق "
                         "Context Filter. جرّب تخفيف max_distance أو إعادة صياغة السؤال."
                     )
+            # نعرض صندوق المصادر فقط لو فعلاً فيه context ومفيش رفض من النموذج.
+            # (وجود context لوحده مش كافي: ممكن الـ chunks تكون اترجعت لكنها
+            # غير كافية للإجابة، فيرفض النموذج، وحينها لا تُعتبر "مصادر مستخدمة".)
+            show_sources = bool(context) and not (prompting is not None and prompting.is_refusal(answer))
             st.markdown(answer)
-            if context:
+            if show_sources:
                 with st.expander(f"📚 المصادر المسترجعة ({len(context)})"):
                     for c in context:
                         st.markdown(chunk_card_html(c), unsafe_allow_html=True)
         st.session_state.messages.append(
-            {"role": "assistant", "content": answer, "chunks": sanitize_chunks(context)}
+            {
+                "role": "assistant",
+                "content": answer,
+                "chunks": sanitize_chunks(context) if show_sources else None,
+            }
         )
 # ================= تبويب التقييم =================
 with tab_eval:
