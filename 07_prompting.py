@@ -89,27 +89,41 @@ def format_sources(context):
     return "**المصادر المستخدمة:**\n" + "\n".join(lines)
 
 
+REFUSAL_KEYWORDS = [
+    "لا أملك معلومات",
+    "لا أعرف",
+    "ليس لدي أي معلومات",
+    "لا تتوفر",
+    "لا يوجد في السياق",
+    "لم يتم ذكر",
+    "أعتذر",
+    "اعتذر",
+    "عذرًا",
+    "غير موجود في السياق",
+    "لا يمكنني الإجابة",
+]
+
+
+def is_refusal(answer):
+    """
+    يتحقق هل الإجابة تمثّل رفضاً (عدم توفر معلومات كافية) أم إجابة فعلية.
+    يُستخدم خارج هذا الملف (مثلاً في streamlit_app.py) لتقرير هل نعرض
+    صندوق "المصادر المسترجعة" للمستخدم أم لا — لأنه حتى لو تم استرجاع
+    chunks (context غير فارغ)، ممكن تكون كلها غير كافية للإجابة فعلياً،
+    فيرفض النموذج، وحينها المصادر دي متبقاش مصادر "استُخدمت" فعلاً.
+    """
+    if not answer:
+        return False
+    return any(keyword in answer for keyword in REFUSAL_KEYWORDS)
+
+
 def generate_answer(query, context):
     """يستدعي النموذج، ويرجع الإجابة النهائية مع قائمة المصادر إن وجدت."""
 
     prompt = build_prompt(query, context)
     answer = call_openrouter(prompt)
 
-    refusal_keywords = [
-        "لا أملك معلومات",
-        "لا أعرف",
-        "ليس لدي أي معلومات",
-        "لا تتوفر",
-        "لا يوجد في السياق",
-        "لم يتم ذكر",
-        "أعتذر",
-        "اعتذر",
-        "عذرًا",
-        "غير موجود في السياق",
-        "لا يمكنني الإجابة"
-    ]
-
-    if not context or any(keyword in answer for keyword in refusal_keywords):
+    if not context or is_refusal(answer):
         return answer
 
     return f"{answer}\n\n{format_sources(context)}"
