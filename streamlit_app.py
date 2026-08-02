@@ -355,7 +355,7 @@ def gt_distribution_html(gt) -> str:
 def footer_html() -> str:
     return """
     <div class="aswan-footer">
-        <div class="aswan-footer-main">© 2025 أسوان نوباوي RAG • مشروع توثيق تراث النوبة</div>
+        <div class="aswan-footer-main">© 2026 أسوان نوباوي RAG • مشروع توثيق تراث النوبة</div>
         <div class="aswan-footer-sub">
             الخط الكامل: 01 المستندات ← 02 التنظيف ← 03 التقطيع ← 04 التمثيل المتجهي ←
             05 مخزن Chroma ← 06 الاسترجاع + Context Filter ← 07 Prompting ←
