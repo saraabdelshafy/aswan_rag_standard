@@ -469,11 +469,10 @@ with tab_chat:
                         "غير مرفوع في المستودع."
                     )
                 else:
-                    try:
+                   try:
                         context = retrieve_module.retrieve_context(
-                            query, k=k_value, persist=False,
-                            max_distance=max_dist, deduplicate_by_document=dedup,
-                        )
+                            query, k=3, persist=False, max_distance=0.8
+                          )
                     except Exception as exc:  # noqa: BLE001
                         answer = f"⚠️ حدث خطأ أثناء الاسترجاع: {type(exc).__name__}: {exc}"
                 if context:
